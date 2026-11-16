@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>정조 17년 화성 승격 및 장용영 개편 사료 지식 그래프 (Pink Theme)</title>
+    <!-- Tailwind CSS & D3.js -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap');
+        body { font-family: 'Noto Sans KR', sans-serif; }
+        .node { cursor: pointer; transition: filter 0.2s; }
+        .node:hover { filter: brightness(1.1); }
+        .link { stroke-opacity: 0.65; transition: stroke-opacity 0.2s, stroke 0.2s; }
+        .link:hover { stroke-opacity: 1; stroke: #db2777; }
+        .highlight-text { background-color: #fbcfe8; color: #831843; padding: 2px 5px; border-radius: 4px; font-weight: 600; }
+    </style>
+</head>
+<body class="bg-pink-50 text-rose-950 h-screen flex flex-col overflow-hidden">
+
+    <!-- Header -->
+    <header class="bg-gradient-to-r from-rose-900 via-pink-800 to-rose-800 text-white px-6 py-4 shadow-md flex justify-between items-center shrink-0">
+        <div>
+            <h1 class="text-xl font-bold tracking-tight flex items-center gap-2">
+                <span>🌸</span> 조선왕조실록 사료 지식 그래프 (Knowledge Graph)
+            </h1>
+            <p class="text-xs text-pink-200 mt-0.5">정조 17년(1793) 1월 12일 — 수원부 화성 승격 및 장용영 제도 개편</p>
+        </div>
+        <div class="flex items-center gap-3">
+            <span class="text-xs bg-rose-950/60 text-pink-100 px-3 py-1.5 rounded-full border border-pink-400/30">노드: <strong id="node-count" class="text-white">23</strong>개</span>
+            <span class="text-xs bg-rose-950/60 text-pink-100 px-3 py-1.5 rounded-full border border-pink-400/30">관계: <strong id="link-count" class="text-white">21</strong>건</span>
+        </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <div class="flex-1 flex overflow-hidden">
+        
+        <!-- Left: Graph & Controls Panel -->
+        <div class="flex-1 flex flex-col relative bg-gradient-to-br from-pink-50 via-rose-50/70 to-pink-100/60">
+            <!-- Toolbar / Filters -->
+            <div class="absolute top-4 left-4 z-10 flex flex-wrap gap-2 bg-white/90 backdrop-blur-md p-3 rounded-xl shadow-sm border border-pink-200 text-xs">
+                <div class="flex items-center gap-1.5 pr-2 border-r border-pink-200">
+                    <span class="font-bold text-rose-900">영역 필터:</span>
+                    <button onclick="filterArea('all')" class="filter-btn px-2.5 py-1 rounded-md bg-pink-600 text-white font-medium transition shadow-xs">전체</button>
+                    <button onclick="filterArea('행정 개편 및 승격')" class="filter-btn px-2.5 py-1 rounded-md bg-pink-100 hover:bg-pink-200 text-rose-800 transition">행정·승격</button>
+                    <button onclick="filterArea('관직 및 군영 직제 개편')" class="filter-btn px-2.5 py-1 rounded-md bg-pink-100 hover:bg-pink-200 text-rose-800 transition">관직·군영</button>
+                    <button onclick="filterArea('공간·인물·의례 및 비유')" class="filter-btn px-2.5 py-1 rounded-md bg-pink-100 hover:bg-pink-200 text-rose-800 transition">공간·의례</button>
+                </div>
+                <div class="flex items-center gap-1.5 pl-1">
+                    <input type="text" id="search-input" placeholder="노드 검색 (예: 화성유수, 장용영)..." class="px-3 py-1 rounded-md border border-pink-300 bg-pink-50/40 focus:bg-white focus:outline-none focus:ring-2 focus:ring-pink-500 text-xs w-52 text-rose-950 placeholder-rose-300" oninput="searchNode(this.value)">
+                </div>
+            </div>
+
+            <!-- SVG Graph Container -->
+            <div id="graph-container" class="w-full h-full cursor-grab active:cursor-grabbing"></div>
+
+            <!-- Graph Legend Bar -->
+            <div class="absolute bottom-4 left-4 z-10 bg-white/90 backdrop-blur-md px-3.5 py-2 rounded-lg shadow-sm border border-pink-200 flex items-center gap-4 text-xs">
+                <span class="font-bold text-rose-900">클래스 범례:</span>
+                <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-[#E11D48] inline-block"></span><span>인물</span></div>
+                <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-[#EC4899] inline-block"></span><span>장소/구역</span></div>
+                <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-[#A855F7] inline-block"></span><span>관청/군영</span></div>
+                <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-[#BE185D] inline-block"></span><span>관직/직책</span></div>
+                <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-[#F43F5E] inline-block"></span><span>문물/기록</span></div>
+                <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-[#FB7185] inline-block"></span><span>사건/의례</span></div>
+            </div>
+        </div>
+
+        <!-- Right: Detail & Source Panel -->
+        <div class="w-[440px] bg-white border-l border-pink-200 flex flex-col shadow-xl z-20">
+            <div class="p-4 border-b border-pink-200 bg-pink-50/80 flex justify-between items-center">
+                <h2 class="font-bold text-rose-950 text-sm flex items-center gap-2">
+                    <svg class="w-4 h-4 text-pink-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    관계 및 사료 발췌 상세 탐색
+                </h2>
+                <span id="active-relation-badge" class="text-[10px] bg-pink-100 text-pink-800 border border-pink-300 font-bold px-2.5 py-0.5 rounded-full">관계선을 클릭하세요</span>
+            </div>
+
+            <!-- Tab Switcher -->
+            <div class="flex border-b border-pink-200 text-xs font-medium bg-pink-50/30">
+                <button onclick="switchTab('detail')" id="tab-detail" class="flex-1 py-2.5 text-center border-b-2 border-pink-600 text-pink-700 font-bold bg-pink-100/50 transition">선택 관계 & 발췌</button>
+                <button onclick="switchTab('fulltext')" id="tab-fulltext" class="flex-1 py-2.5 text-center text-rose-600 hover:text-rose-900 border-b-2 border-transparent transition">사료 원문 전체보기</button>
+            </div>
+
+            <!-- Tab Content -->
+            <div class="flex-1 overflow-y-auto p-5 text-sm space-y-4">
+                
+                <!-- Tab 1: Selected Relation & Snippet -->
+                <div id="content-detail" class="space-y-4">
+                    <div class="bg-gradient-to-r from-pink-50 to-rose-50 border border-pink-200 p-4 rounded-xl">
+                        <div class="text-xs font-bold text-pink-600 uppercase tracking-wider mb-1" id="info-category">선택된 관계 영역</div>
+                        <div class="text-base font-bold text-rose-950 flex flex-wrap items-center gap-2 mt-1.5">
+                            <span id="info-subject" class="bg-white px-2.5 py-1 rounded-md border border-pink-300 shadow-xs text-xs text-rose-900">주체</span>
+                            <span id="info-predicate" class="text-pink-600 text-xs font-bold">→ [관계] →</span>
+                            <span id="info-object" class="bg-white px-2.5 py-1 rounded-md border border-pink-300 shadow-xs text-xs text-rose-900">대상</span>
+                        </div>
+                    </div>
+
+                    <div>
+                        <h3 class="text-xs font-bold text-rose-500 uppercase tracking-wider mb-2">사료 원문 발췌 (근거 구절)</h3>
+                        <div id="info-snippet" class="p-4 rounded-xl bg-pink-50/50 border border-pink-200 text-rose-900 leading-relaxed text-xs shadow-inner">
+                            그래프에서 화살표(관계선)나 연결 라벨을 클릭하시면, 해당 관계에 대응하는 조선왕조실록 원문 발췌 구절과 상세 해설을 확인하실 수 있습니다.
+                        </div>
+                    </div>
+
+                    <div>
+                        <h3 class="text-xs font-bold text-rose-500 uppercase tracking-wider mb-2">개체 세부 정보</h3>
+                        <div class="grid grid-cols-2 gap-2.5 text-xs">
+                            <div class="p-3 bg-pink-50/40 rounded-lg border border-pink-200">
+                                <span class="text-pink-500 font-medium block mb-0.5">주체 (Subject)</span>
+                                <strong id="meta-sub-name" class="text-rose-950">-</strong>
+                                <p id="meta-sub-desc" class="text-rose-700/80 text-[11px] mt-1">-</p>
+                            </div>
+                            <div class="p-3 bg-pink-50/40 rounded-lg border border-pink-200">
+                                <span class="text-pink-500 font-medium block mb-0.5">대상 (Object)</span>
+                                <strong id="meta-obj-name" class="text-rose-950">-</strong>
+                                <p id="meta-obj-desc" class="text-rose-700/80 text-[11px] mt-1">-</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab 2: Full Source Text -->
+                <div id="content-fulltext" class="hidden space-y-3">
+                    <div class="text-xs text-rose-800 bg-pink-100/80 border border-pink-300 p-3 rounded-lg">
+                        🌸 아래 실록 원문 중 그래프에서 선택한 관계와 연관된 문장은 자동으로 핑크색 하이라이트됩니다.
+                    </div>
+                    <div id="fulltext-body" class="text-xs leading-relaxed text-rose-950 space-y-3 bg-pink-50/40 p-4 rounded-xl border border-pink-200">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Footer Note -->
+            <div class="p-3 bg-pink-50 border-t border-pink-200 text-center text-[11px] text-rose-400">
+                Data Source: 조선왕조실록 정조 17년 1월 12일 기사 (지식 그래프 온톨로지)
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // Data definition
+        const nodes = [
+            { id: "P_01", label: "정조 (화자/왕)", class: "Person", hanja: "正祖", desc: "전교 주체, 화성 승격 및 군영 개편 단행" },
+            { id: "P_02", label: "사도세자", class: "Person", hanja: "思悼世子", desc: "정조의 부친, 현륭원 능주" },
+            { id: "PL_01", label: "수원부 (→ 화성)", class: "Place", hanja: "水原府 → 華城", desc: "호칭 개칭 및 유수부 승격" },
+            { id: "PL_02", label: "장남헌", class: "Place", hanja: "壯南軒", desc: "수원 행궁 내 건물, 화성 현판 게첨처" },
+            { id: "PL_03", label: "현륭원", class: "Place", hanja: "顯隆園", desc: "사도세자의 능원, 수원부 관방 중요성 증대 계기" },
+            { id: "PL_04", label: "화성 행궁", class: "Place", hanja: "華城 行宮", desc: "왕이 머무는 임시 처소, 사도세자 의관·영정 봉안" },
+            { id: "PL_05", label: "남한산성", class: "Place", hanja: "南漢山城", desc: "비교 대상으로 언급된 방위 거점 (유수부 선례)" },
+            { id: "PL_06", label: "풍(豊) / 패(沛)", class: "Place", hanja: "豊 / 沛", desc: "주나라·한나라의 발상지 (화성의 소중함 비유)" },
+            { id: "ORG_01", label: "장용영", class: "Organization", hanja: "壯勇營", desc: "내영(內營)·외영(外營)으로 구성된 친위 군영" },
+            { id: "ORG_02", label: "호위청 (호위대장 관청)", class: "Organization", hanja: "扈衛大將 官廳", desc: "장용영에 합속됨" },
+            { id: "ORG_03", label: "어영청", class: "Organization", hanja: "御營廳", desc: "직제 및 대장 호칭 비교 대상" },
+            { id: "ORG_04", label: "경리영", class: "Organization", hanja: "經理營", desc: "도제거(삼공 예겸) 직제 비교 대상" },
+            { id: "OT_01", label: "수원부사", class: "OfficialTitle", hanja: "水原府使", desc: "3품직 (폐지 후 화성유수로 승격)" },
+            { id: "OT_02", label: "화성유수", class: "OfficialTitle", hanja: "華城留守", desc: "임명조건: 대신 또는 무장 특지 임명" },
+            { id: "OT_03", label: "장용외사", class: "OfficialTitle", hanja: "壯勇外使", desc: "화성유수 겸직 (외영 지휘)" },
+            { id: "OT_04", label: "행궁정리사", class: "OfficialTitle", hanja: "行宮整理使", desc: "화성유수 겸직 (행궁 관리)" },
+            { id: "OT_05", label: "판관", class: "OfficialTitle", hanja: "判官", desc: "정원 1인, 화성유수 보좌" },
+            { id: "OT_06", label: "장용영 병방 (→ 장용사)", class: "OfficialTitle", hanja: "壯勇營兵房 → 壯勇使", desc: "문서상 대장(大將)으로 호칭" },
+            { id: "OT_07", label: "도제거", class: "OfficialTitle", hanja: "都提擧", desc: "장용영 최고 직책, 삼공(三公) 예겸직 형태 모방" },
+            { id: "OT_08", label: "호위대장", class: "OfficialTitle", hanja: "扈衛大將", desc: "합속된 호위청의 기존 수장" },
+            { id: "ART_01", label: "화성 현판", class: "Artifact", hanja: "華城 懸板", desc: "정조의 어필(御筆)로 작성되어 장남헌에 걸림" },
+            { id: "ART_02", label: "사도세자 의관 및 영정", class: "Artifact", hanja: "衣冠·影幀", desc: "화성 행궁 봉안 및 혼정신성 대상" },
+            { id: "EVT_01", label: "설날 조참 (四條 하유)", class: "Event", hanja: "朝參", desc: "군(軍)·민(民) 폐단 제거 등 4가지 항목 하유" }
+        ];
+
+        const links = [
+            { id: "REL_01", area: "행정 개편 및 승격", source: "PL_01", target: "PL_01", predicate: "renamedTo", predicateKo: "개칭됨", desc: "수원부의 호칭을 화성으로 바꾸고", snippet: "수원부(水原府)의 호칭을 화성(華城)으로 바꾸고 어필(御筆)로 현판을 써서 장남헌(壯南軒)에 걸었다." },
+            { id: "REL_02", area: "행정 개편 및 승격", source: "OT_01", target: "OT_02", predicate: "upgradedTo", predicateKo: "승격됨", desc: "수원부사(3품)를 화성유수로 승격", snippet: "부사(府使)를 유수(留守)로 승격시켜 장용 외사(壯勇外使)와 행궁 정리사(行宮整理使)를 겸임하게 하고, 판관(判官) 한 사람을 두어 보좌하게 하였다." },
+            { id: "REL_03", area: "행정 개편 및 승격", source: "P_01", target: "ART_01", predicate: "wrote", predicateKo: "작성함", desc: "정조가 어필로 현판을 씀", snippet: "수원부(水原府)의 호칭을 화성(華城)으로 바꾸고 어필(御筆)로 현판을 써서 장남헌(壯南軒)에 걸었다." },
+            { id: "REL_04", area: "행정 개편 및 승격", source: "ART_01", target: "PL_02", predicate: "hungAt", predicateKo: "걸림", desc: "화성 현판을 장남헌에 걸음", snippet: "수원부(水原府)의 호칭을 화성(華城)으로 바꾸고 어필(御筆)로 현판을 써서 장남헌(壯南軒)에 걸었다." },
+            { id: "REL_05", area: "관직 및 군영 직제 개편", source: "OT_02", target: "PL_01", predicate: "governs", predicateKo: "관할함", desc: "화성유수가 화성을 관할함", snippet: "지금부터는 수원 부사를 유수로 승격시키어 장용 외사(壯勇外使)와 행궁 정리사(行宮整理使)를 겸임하게 하고" },
+            { id: "REL_06", area: "관직 및 군영 직제 개편", source: "OT_02", target: "OT_03", predicate: "concurrentlyHolds", predicateKo: "겸임함", desc: "화성유수가 장용외사를 겸임함", snippet: "부사(府使)를 유수(留守)로 승격시켜 장용 외사(壯勇外使)와 행궁 정리사(行宮整理使)를 겸임하게 하고" },
+            { id: "REL_07", area: "관직 및 군영 직제 개편", source: "OT_02", target: "OT_04", predicate: "concurrentlyHolds", predicateKo: "겸임함", desc: "화성유수가 행궁정리사를 겸임함", snippet: "부사(府使)를 유수(留守)로 승격시켜 장용 외사(壯勇外使)와 행궁 정리사(行宮整理使)를 겸임하게 하고" },
+            { id: "REL_08", area: "관직 및 군영 직제 개편", source: "OT_05", target: "OT_02", predicate: "assists", predicateKo: "보좌함", desc: "판관 1인이 화성유수를 보좌함", snippet: "판관(判官) 한 사람을 두어 보좌하게 하였다." },
+            { id: "REL_09", area: "관직 및 군영 직제 개편", source: "OT_06", target: "OT_06", predicate: "renamedTo", predicateKo: "개칭됨", desc: "장용영 병방을 장용사(대장)로 개칭", snippet: "장용영 병방(壯勇營兵房)을 고쳐 장용사(壯勇使)라 하고" },
+            { id: "REL_10", area: "관직 및 군영 직제 개편", source: "OT_06", target: "ORG_01", predicate: "commands", predicateKo: "지휘함", desc: "장용사가 장용영을 지휘함", snippet: "장용영 병방(壯勇營兵房)을 고쳐 장용사(壯勇使)라 하고" },
+            { id: "REL_11", area: "관직 및 군영 직제 개편", source: "OT_07", target: "ORG_01", predicate: "establishedIn", predicateKo: "설치됨", desc: "장용영에 도제거 직제를 둠", snippet: "도제거(都提擧)를 두어 호위 대장(扈衛大將)의 관청을 합해서 그를 소속시켰다." },
+            { id: "REL_12", area: "관직 및 군영 직제 개편", source: "ORG_02", target: "ORG_01", predicate: "mergedInto", predicateKo: "합속됨", desc: "호위대장 관청을 합쳐 장용영에 소속시킴", snippet: "도제거(都提擧)를 두어 호위 대장(扈衛大將)의 관청을 합해서 그를 소속시켰다." },
+            { id: "REL_13", area: "공간·인물·의례 및 비유", source: "PL_03", target: "PL_01", predicate: "locatedIn", predicateKo: "위치함", desc: "현륭원이 화성(수원부) 내에 위치함", snippet: "이곳 수원부는 〈현륭원〉 자리를 마련한 뒤로부터 관방(關防)이 더욱 중하여졌다." },
+            { id: "REL_14", area: "공간·인물·의례 및 비유", source: "PL_03", target: "P_02", predicate: "tombOf", predicateKo: "능원임", desc: "현륭원은 사도세자의 능원임", snippet: "아름다운 이 자연의 요해처에 달마다 꺼내 볼 〈사도 세자의〉 의관(衣冠)들을 길이 봉안하리라." },
+            { id: "REL_15", area: "공간·인물·의례 및 비유", source: "PL_04", target: "ART_02", predicate: "enshrines", predicateKo: "봉안함", desc: "화성 행궁에 사도세자 의관·영정 봉안", snippet: "미리 행궁을 세워 먼저 우러르고 의지하는 생각을 붙였고, 영정을 그려 걸어서 혼정 신성의 정성을 대신하니" },
+            { id: "REL_16", area: "공간·인물·의례 및 비유", source: "P_01", target: "PL_04", predicate: "built", predicateKo: "건립함", desc: "정조가 미리 화성 행궁을 세움", snippet: "미리 행궁을 세워 먼저 우러르고 의지하는 생각을 붙였고" },
+            { id: "REL_17", area: "공간·인물·의례 및 비유", source: "PL_02", target: "PL_04", predicate: "partOf", predicateKo: "일부임", desc: "장남헌은 화성 행궁 내 건물임", snippet: "수원부(水原府)의 호칭을 화성(華城)으로 바꾸고 어필(御筆)로 현판을 써서 장남헌(壯南軒)에 걸었다." },
+            { id: "REL_18", area: "공간·인물·의례 및 비유", source: "PL_04", target: "PL_01", predicate: "locatedIn", predicateKo: "위치함", desc: "화성 행궁은 화성 내에 위치함", snippet: "미리 행궁을 세워 먼저 우러르고 의지하는 생각을 붙였고" },
+            { id: "REL_19", area: "공간·인물·의례 및 비유", source: "PL_01", target: "PL_06", predicate: "comparedTo", predicateKo: "비유됨", desc: "화성의 소중함을 주나라 풍·한나라 패에 비유", snippet: "이 땅의 소중함은 실로 주(周)나라의 풍(豊)이나 한(漢)나라의 패(沛)와 같이 융성할 것이다." },
+            { id: "REL_20", area: "공간·인물·의례 및 비유", source: "OT_02", target: "PL_05", predicate: "modeledAfter", predicateKo: "제도를 본뜸", desc: "남한산성 유수 제도를 본떠 대신·무장 임명", snippet: "남한 산성은 단지 방위하는 성의 역할만이 있을 뿐인데도 대신이 사(使)가 되고 유수는 문반의 경재(卿宰)로만 오로지 차임하면서도 방위의 일을 위해서는 무장(武將)이 남한 산성에 통의(通擬)되었다." },
+            { id: "REL_21", area: "공간·인물·의례 및 비유", source: "P_01", target: "EVT_01", predicate: "issuedInstructionAt", predicateKo: "하유함", desc: "정조가 설날 조참에서 군·민 폐단 제거 등 4조 하유", snippet: "그래서 내가 설날 조참(朝參) 때에 네 가지 항목을 들어 하유하였는데, 네 가지 항목 중에서 군(軍)과 민(民)이 그 두 자리를 차지하였고" }
+        ];
+
+        const fulltextParagraphs = [
+            "수원부(水原府)의 호칭을 화성(華城)으로 바꾸고 어필(御筆)로 현판을 써서 장남헌(壯南軒)에 걸었다. 부사(府使)를 유수(留守)로 승격시켜 장용 외사(壯勇外使)와 행궁 정리사(行宮整理使)를 겸임하게 하고, 판관(判官) 한 사람을 두어 보좌하게 하였다. 장용영 병방(壯勇營兵房)을 고쳐 장용사(壯勇使)라 하고, 도제거(都提擧)를 두어 호위 대장(扈衛大將)의 관청을 합해서 그를 소속시켰다. 전교하였다.",
+            "\"왕위에 오른 이후로 재용을 많이 저축하는 것을 가장 소중하게 여겨 왔다. 그런데 다행히 황천에 계신 조종(祖宗)의 말없는 도움을 입어 용이 서리고 범이 웅크린 듯한 좋은 자리를 잡아 영원토록 천억만년 끝없을 큰 운세를 정하였으니, 이 땅의 소중함은 실로 주(周)나라의 풍(豊)이나 한(漢)나라의 패(沛)와 같이 융성할 것이다. 오직 이 곳을 잘 수호할 방도를 더욱 애써 치밀하게 하여 체모가 존엄하고 제도가 엄숙하여지도록 하는 것이 바로 나 소자(小子)의 정리로나 예법으로나 당연히 해야 할 일이니, 비유하자면 마치 종묘의 예절을 두고 먼저 백관(百官)의 아름다움을 말하는 것과 같을 것이다. 그 소중함에 관계되는 것이 이와 같다.\"",
+            "이곳 수원부는 〈현륭원〉 자리를 마련한 뒤로부터 관방(關防)이 더욱 중하여졌다. 아름다운 이 자연의 요해처에 달마다 꺼내 볼 〈사도 세자의〉 의관(衣冠)들을 길이 봉안하리라. 미리 행궁을 세워 먼저 우러르고 의지하는 생각을 붙였고, 영정을 그려 걸어서 혼정 신성의 정성을 대신하니, 어린애처럼 어버이 사모하는 마음이 가슴에 북받쳐 올라 절제할 줄을 모르겠다. 매년 3백 일 동안을 하루도 빠짐없이 손꼽아 기다리고 바라던 것이 오로지 예를 행하는 하룻동안에 있었기에, 이미 배알을 마치고 환궁하는 길에 수원부의 경계가 다하는 고갯마루에 거가를 멈추고 우러러 바라보며 머뭇거리노라면 나도 모르게 발걸음이 더디어지곤 하였다. 그래서 번번이 수신(守臣)을 불러 앞으로 나오게 하여 정성을 다해 수호하라는 뜻으로 거듭거듭 당부했었다. 그러나 그의 직책은 한 고을의 원이요 그의 품계를 물어보면 3품직의 자리이다. 적임자를 얻어 그 일을 맡기는 것이야 벼슬의 높낮이에 관계될 것이 아니겠지만, 조정의 거조란 지위가 높지 아니하면 위엄이 서지 못하는 것이다. 관방에 대해서는 우선 제쳐두고라도 나의 행궁을 정리하는 여러 가지 임무를 어찌 3품의 고을 원에게 맡겨둘 수 있겠는가. 그러나 모든 일은 옛날을 따르는 것이 가장 좋은 것이다. 남한 산성은 단지 방위하는 성의 역할만이 있을 뿐인데도 대신이 사(使)가 되고 유수는 문반의 경재(卿宰)로만 오로지 차임하면서도 방위의 일을 위해서는 무장(武將)이 남한 산성에 통의(通擬)되었다. 그런데 더구나 이 곳 이 수원부의 소중함이겠는가.",
+            "지금부터는 수원 부사를 유수로 승격시키어 장용 외사(壯勇外使)와 행궁 정리사(行宮整理使)를 겸임하게 하고 오직 대신이나 무장으로 특지를 받아 〈유수에 임명하고〉 또 판관(判官)을 두어 보좌하게 하라. 장용영을 설치한 지는 여러 해가 되었으나 장용영 장수의 칭호를 아직 결정하지 못한 것은 외사(外使)가 나오기를 기다린 때문이다. 장용영 병방(壯勇營兵房)을 장용사(壯勇使)라 하고 장용영의 문서들에는 대장이라고 호칭하기를 마치 어영사(御營使)를 어영 대장이라 호칭하는 것처럼 하며, 도제거(都提擧)를 두어 그 법식을 갖추되 역시 경리영(經理營)의 도제거를 삼공이 예겸하는 것처럼 하고 호위 대장의 관청을 합해서 그를 소속시키라. 그리고 내영(內營)과 외영(外營)의 군수 물자와 군사들의 식량을 마련하고 조처하는 것에는 모두 경비에 의존하지 않게 할 것이니, 이것이 곧 재용을 저축하는 것을 소중히 여긴 까닭이다.",
+            "나는 자나깨나 한 마음이 선대를 사모하는 데에 있다. 백성을 보호하는 것도 비록 길은 다른 것 같으나 거기에 쓰여지는 마음은 마찬가지다. 이 백성은 곧 선왕의 백성이다. 그러니 지금 이 백성들을 감싸 보호하려면 의당 먼저 폐단을 제거해야 하는데, 가장 큰 폐단은 군영(軍營)이 많은 것을 덮을 것이 없다. 그래서 내가 설날 조참(朝參) 때에 네 가지 항목을 들어 하유하였는데, 네 가지 항목 중에서 군(軍)과 민(民)이 그 두 자리를 차지하였고 그 말을 한 것은 앞으로 행하고자 함에서였다. 선왕이 드나드셨던 문에 임하고 선왕이 앉았던 자리에 앉아서, 말만 하고 능히 그 말을 실천하지 못하는 것이야말로 내가 비록 부덕하지만 욕스럽게 그러지는 않을 것이다. 중앙과 지방으로 하여금 이 전교를 길이 새겨 보고 은미한 뜻을 자세히 헤아려서, 내가 이 일을 경영하여 우리 후인들을 계도해서 우리 국운이 억만년토록 영원하기를 비는 본의를 알게 하라."
+        ];
+
+        // Pink / Rose Palette for Classes
+        const classColors = {
+            'Person': '#E11D48',        // Rose 600
+            'Place': '#EC4899',         // Pink 500
+            'Organization': '#A855F7',  // Purple/Orchid 500
+            'OfficialTitle': '#BE185D', // Pink 700
+            'Artifact': '#F43F5E',      // Rose 500
+            'Event': '#FB7185'          // Rose 400
+        };
+
+        let currentFilter = 'all';
+        let selectedLink = null;
+
+        // D3 Force Simulation Setup
+        const container = d3.select("#graph-container");
+        const width = container.node().clientWidth;
+        const height = container.node().clientHeight;
+
+        const svg = container.append("svg")
+            .attr("width", "100%")
+            .attr("height", "100%")
+            .attr("viewBox", [-width / 2, -height / 2, width, height]);
+
+        const g = svg.append("g");
+
+        // Zoom setup
+        const zoom = d3.zoom()
+            .scaleExtent([0.3, 4])
+            .on("zoom", (event) => g.attr("transform", event.transform));
+        svg.call(zoom);
+
+        // Arrow marker definition (Rose & Hot Pink)
+        svg.append("defs").selectAll("marker")
+            .data(["end", "selected"])
+            .join("marker")
+            .attr("id", d => d)
+            .attr("viewBox", "0 -5 10 10")
+            .attr("refX", 22)
+            .attr("refY", 0)
+            .attr("markerWidth", 6)
+            .attr("markerHeight", 6)
+            .attr("orient", "auto")
+            .append("path")
+            .attr("fill", d => d === "selected" ? "#db2777" : "#be185d")
+            .attr("d", "M0,-5L10,0L0,5");
+
+        // Map nodes and links for D3
+        const nodeMap = new Map(nodes.map(d => [d.id, d]));
+        const simLinks = links.map(d => ({
+            ...d,
+            source: nodeMap.get(d.source),
+            target: nodeMap.get(d.target)
+        }));
+
+        const simulation = d3.forceSimulation(nodes)
+            .force("link", d3.forceLink(simLinks).id(d => d.id).distance(125))
+            .force("charge", d3.forceManyBody().strength(-400))
+            .force("center", d3.forceCenter(0, 0))
+            .force("collision", d3.forceCollide().radius(46));
+
+        // Draw Links
+        const link = g.append("g")
+            .selectAll("path")
+            .data(simLinks)
+            .join("path")
+            .attr("class", "link")
+            .attr("stroke", "#f472b6")
+            .attr("stroke-width", 1.8)
+            .attr("fill", "none")
+            .attr("marker-end", "url(#end)")
+            .on("click", (event, d) => selectRelation(d));
+
+        // Draw Link Labels (Clickable)
+        const linkText = g.append("g")
+            .selectAll("text")
+            .data(simLinks)
+            .join("text")
+            .attr("font-size", "10px")
+            .attr("fill", "#9d174d")
+            .attr("font-weight", "500")
+            .attr("text-anchor", "middle")
+            .attr("class", "cursor-pointer hover:font-bold")
+            .text(d => d.predicateKo)
+            .on("click", (event, d) => selectRelation(d));
+
+        // Draw Nodes
+        const node = g.append("g")
+            .selectAll("g")
+            .data(nodes)
+            .join("g")
+            .attr("class", "node")
+            .call(d3.drag()
+                .on("start", dragstarted)
+                .on("drag", dragged)
+                .on("end", dragended));
+
+        node.append("circle")
+            .attr("r", 22)
+            .attr("fill", d => classColors[d.class])
+            .attr("stroke", "#ffffff")
+            .attr("stroke-width", 2.5);
+
+        node.append("text")
+            .attr("dy", 35)
+            .attr("text-anchor", "middle")
+            .attr("fill", "#881337")
+            .attr("font-size", "11px")
+            .attr("font-weight", "600")
+            .text(d => d.label);
+
+        simulation.on("tick", () => {
+            link.attr("d", d => {
+                if (d.source.id === d.target.id) {
+                    const x = d.source.x, y = d.source.y;
+                    return `M ${x} ${y} C ${x - 40} ${y - 60}, ${x + 40} ${y - 60}, ${x} ${y}`;
+                }
+                const dx = d.target.x - d.source.x,
+                      dy = d.target.y - d.source.y,
+                      dr = Math.sqrt(dx * dx + dy * dy);
+                return `M${d.source.x},${d.source.y}A${dr},${dr} 0 0,1 ${d.target.x},${d.target.y}`;
+            });
+
+            linkText
+                .attr("x", d => {
+                    if (d.source.id === d.target.id) return d.source.x;
+                    return (d.source.x + d.target.x) / 2;
+                })
+                .attr("y", d => {
+                    if (d.source.id === d.target.id) return d.source.y - 42;
+                    return (d.source.y + d.target.y) / 2 - 6;
+                });
+
+            node.attr("transform", d => `translate(${d.x},${d.y})`);
+        });
+
+        function dragstarted(event, d) {
+            if (!event.active) simulation.alphaTarget(0.3).restart();
+            d.fx = d.x;
+            d.fy = d.y;
+        }
+
+        function dragged(event, d) {
+            d.fx = event.x;
+            d.fy = event.y;
+        }
+
+        function dragended(event, d) {
+            if (!event.active) simulation.alphaTarget(0);
+            d.fx = null;
+            d.fy = null;
+        }
+
+        // Selection & Interaction Logic
+        function selectRelation(d) {
+            selectedLink = d;
+            
+            // Highlight link styling
+            link.attr("stroke", l => l === d ? "#db2777" : "#f472b6")
+                .attr("stroke-width", l => l === d ? 3.5 : 1.8)
+                .attr("marker-end", l => l === d ? "url(#selected)" : "url(#end)");
+
+            // Update Detail Panel
+            document.getElementById("active-relation-badge").innerText = d.id + " 선택됨";
+            document.getElementById("info-category").innerText = d.area;
+            document.getElementById("info-subject").innerText = d.source.label;
+            document.getElementById("info-predicate").innerText = `→ [${d.predicateKo} (${d.predicate})] →`;
+            document.getElementById("info-object").innerText = d.target.label;
+
+            // Snippet formatting
+            document.getElementById("info-snippet").innerHTML = `"${d.snippet}"`;
+
+            // Meta info
+            document.getElementById("meta-sub-name").innerText = `${d.source.label} (${d.source.hanja})`;
+            document.getElementById("meta-sub-desc").innerText = d.source.desc;
+            document.getElementById("meta-obj-name").innerText = `${d.target.label} (${d.target.hanja})`;
+            document.getElementById("meta-obj-desc").innerText = d.target.desc;
+
+            renderFullText(d.snippet);
+        }
+
+        function renderFullText(highlightPhrase = "") {
+            const container = document.getElementById("fulltext-body");
+            container.innerHTML = fulltextParagraphs.map(p => {
+                let html = p;
+                if (highlightPhrase && p.includes(highlightPhrase.substring(0, 8))) {
+                    html = p.replace(highlightPhrase, `<span class="highlight-text">${highlightPhrase}</span>`);
+                }
+                return `<p class="border-l-2 border-pink-300 pl-3 py-0.5">${html}</p>`;
+            }).join("");
+        }
+
+        function switchTab(tab) {
+            const isDetail = tab === 'detail';
+            document.getElementById("content-detail").classList.toggle("hidden", !isDetail);
+            document.getElementById("content-fulltext").classList.toggle("hidden", isDetail);
+            
+            document.getElementById("tab-detail").className = isDetail ? 
+                "flex-1 py-2.5 text-center border-b-2 border-pink-600 text-pink-700 font-bold bg-pink-100/50 transition" : 
+                "flex-1 py-2.5 text-center text-rose-600 hover:text-rose-900 border-b-2 border-transparent transition";
+            document.getElementById("tab-fulltext").className = !isDetail ? 
+                "flex-1 py-2.5 text-center border-b-2 border-pink-600 text-pink-700 font-bold bg-pink-100/50 transition" : 
+                "flex-1 py-2.5 text-center text-rose-600 hover:text-rose-900 border-b-2 border-transparent transition";
+        }
+
+        function filterArea(area) {
+            currentFilter = area;
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                const match = btn.innerText.includes(area.substring(0, 2)) || (area === 'all' && btn.innerText === '전체');
+                btn.className = match ? 
+                    "filter-btn px-2.5 py-1 rounded-md bg-pink-600 text-white font-medium transition shadow-xs" : 
+                    "filter-btn px-2.5 py-1 rounded-md bg-pink-100 hover:bg-pink-200 text-rose-800 transition";
+            });
+
+            link.style("opacity", l => area === 'all' || l.area === area ? 1 : 0.15);
+            linkText.style("opacity", l => area === 'all' || l.area === area ? 1 : 0.15);
+            
+            const activeNodes = new Set();
+            simLinks.forEach(l => {
+                if (area === 'all' || l.area === area) {
+                    activeNodes.add(l.source.id);
+                    activeNodes.add(l.target.id);
+                }
+            });
+
+            node.style("opacity", n => area === 'all' || activeNodes.has(n.id) ? 1 : 0.2);
+        }
+
+        function searchNode(keyword) {
+            if (!keyword) {
+                node.style("opacity", 1);
+                link.style("opacity", 1);
+                linkText.style("opacity", 1);
+                return;
+            }
+            const kw = keyword.toLowerCase();
+            node.style("opacity", n => n.label.toLowerCase().includes(kw) || n.hanja.toLowerCase().includes(kw) ? 1 : 0.15);
+        }
+
+        // Initialize full text on load
+        renderFullText();
+    </script>
+</body>
+</html>
